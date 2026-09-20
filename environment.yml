@@ -1,0 +1,60 @@
+# Conda environment for Ei.
+#
+# Versions are pinned to minor releases because the analysis is numerical: BLAS and
+# LAPACK changes alter floating-point reduction order, which moves eigenvalues in the
+# last digits.  That does not change a conclusion, but it does change a hash, and an
+# unexplained hash change is indistinguishable from tampering.
+#
+#   conda env create -f environment.yml
+#   conda activate ei
+#   pip install -e .
+#   pytest -q
+#
+name: ei
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip=24.*
+
+  # --- numerical core ---
+  - numpy=2.*
+  - scipy=1.14.*
+  # nomkl + openblas: MKL's threading is nondeterministic across CPU generations, so a
+  # rerun on different hardware can differ in the last digits. OpenBLAS with a pinned
+  # thread count is reproducible.
+  - nomkl
+  - libopenblas=0.3.*
+
+  # --- configuration & IO ---
+  - pyyaml=6.*
+  - pyarrow=17.*        # parquet export of activations; float32 columnar beats npy at scale
+  - h5py=3.*
+
+  # --- analysis & display ---
+  - pandas=2.*
+  - matplotlib-base=3.9.*
+  - tqdm=4.*
+
+  # --- testing & quality ---
+  - pytest=8.*
+  - pytest-cov=5.*
+  - ruff=0.6.*
+
+  - pip:
+      # Model backends are OPTIONAL and intentionally not pinned here: they pull CUDA
+      # builds that must match the host driver.  Install them with the `models` extra
+      # inside the container, where the driver is known:
+      #     pip install -e '.[models]'
+      #
+      # - torch>=2.1
+      # - transformer-lens>=2.0
+      # - transformers>=4.40
+      # - nnsight>=0.3
+      - -e .
+
+variables:
+  # Reproducibility: thread count changes FP reduction order.
+  OMP_NUM_THREADS: "8"
+  OPENBLAS_NUM_THREADS: "8"
+  PYTHONHASHSEED: "0"

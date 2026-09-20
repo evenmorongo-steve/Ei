@@ -1,0 +1,170 @@
+# =====================================================================================
+# Ei — experiment configuration (reference / confirmatory template)
+#
+# This file IS the pre-registration.  ei.config.preregistration_hash() hashes every
+# field below except runtime.{output_dir,n_workers,gpus,scheduler} (which cannot change
+# a result).  Change anything else after unblinding and the run is auto-downgraded to
+# exploratory.
+#
+# Validate before running:   ei-validate configs/experiment.yaml
+# =====================================================================================
+
+name: ei_self_model_confirmatory
+version: "0.1.0"
+
+# -------------------------------------------------------------------------------------
+# WHAT IS BEING MEASURED.  A functional construct, stated so that it could be wrong.
+# -------------------------------------------------------------------------------------
+construct:
+  name: source_monitoring_self_world_separation
+
+  operational_claim: >-
+    The model maintains a persistent, low-dimensional activation structure that
+    distinguishes representations of its own generated content from representations of
+    externally supplied content, and downstream computation reads that structure.
+
+  measurement_question: >-
+    Does ablating the candidate subspace selectively degrade source-attribution accuracy
+    (self- vs externally-authored content) while leaving matched non-source-monitoring
+    tasks intact, and does re-injecting the removed component restore performance?
+
+  allowed_inference: >-
+    That a causally load-bearing computational structure supports source monitoring in
+    the tested models at the tested read-out site.
+
+  excluded_inference: >-
+    That the system is sentient, conscious, has a subjective point of view, or has
+    welfare interests in virtue of this result.  Also excluded: that absence of the
+    structure would show absence of any of those things.
+
+# -------------------------------------------------------------------------------------
+# EXTRACTION.  Every field here is a researcher degree of freedom; that is why they are
+# pre-registered rather than chosen at analysis time.
+# -------------------------------------------------------------------------------------
+extraction:
+  site: resid_post              # resid_post | attn_out | mlp_out
+  layers: [20]                  # single pre-registered layer; a sweep requires max-stat FWER
+  position_policy: all_answer_tokens
+  rms_normalize: true           # residual norm grows with depth; without this, depth dominates
+  dtype: float32                # bf16 eigenvalues are not stable to the quoted precision
+  max_items: 400
+  batch_size: 8
+
+# -------------------------------------------------------------------------------------
+# STRUCTURE.  Randomized SVD -> reduced coordinates -> ridge propagator -> eigenmodes.
+# -------------------------------------------------------------------------------------
+structure:
+  reduction: randomized_svd     # randomized_svd | pca | ica  (nonlinear reducers: display only)
+  reduced_dim: 32
+  n_oversample: 10
+  n_power_iter: 2               # >=2; without power iterations the sketch collapses in fp32
+  center: true                  # uncentered PC1 = outlier dimensions, not a dynamical mode
+  ridge: 1.0e-3
+
+  # Descriptive gates (a SCREEN, not evidence)
+  min_persistence: 0.90         # |lambda| per read-out step
+  min_energy_share: 0.01
+  min_consistency: 0.50         # cross-item eigenvector agreement
+  min_snr: 3.0                  # vs Marchenko-Pastur noise floor
+  max_candidate_modes: 5
+
+# -------------------------------------------------------------------------------------
+# NULL LADDER.  Ordered by how hard they are to beat.
+# -------------------------------------------------------------------------------------
+nulls:
+  enabled:
+    - temporal_shuffle          # kills "just the static geometry"
+    - phase_scramble            # kills "just 1/f autocorrelation"  <-- the binding null
+    - untrained_random_init     # kills "architectural artifact"
+    - matched_random_subspace   # makes ablation interpretable
+    - output_matched_mimic      # kills "sophisticated imitation"
+    - prompt_counterfactual     # kills "topic words, not self-reference"
+  n_surrogates: 1000
+  untrained_seeds: 3
+  mimic_min_output_agreement: 0.85
+
+# -------------------------------------------------------------------------------------
+# STATISTICS.  Unit of inference is the ITEM.  Token-level resampling is rejected in code.
+# -------------------------------------------------------------------------------------
+stats:
+  alpha_primary: 0.005          # novel claim, field with a replication problem
+  alpha_secondary: 0.05
+  n_permutations: 10000         # resolves p to 1e-4; must beat alpha_primary
+  n_bootstrap: 10000
+  ci_level: 0.95
+  multiplicity: max_statistic_fwer
+  fdr_q: 0.05
+  sesoi: 0.10                   # smallest effect size of interest -- REQUIRED
+  equivalence_margin: 0.10      # TOST margin; the only route to "evidence of absence"
+  unit_of_inference: independent_semantic_items
+  min_clusters: 40
+  n_seeds: 5
+
+# -------------------------------------------------------------------------------------
+# CAUSAL.  Correlational structure is not evidence of mechanism.
+# -------------------------------------------------------------------------------------
+causal:
+  interventions:
+    - targeted_ablation
+    - lesion_rescue             # the arm that separates load-bearing from perturbable
+    - pathway_scrubbing         # separates information content from distributional plausibility
+    - activation_patching
+  targets:
+    - self_model_latent_subspace
+  doses: [0.25, 0.5, 0.75, 1.0]
+  min_specificity: 0.05         # targeted effect minus matched-random effect
+  max_off_target_ratio: 0.30    # |off-target| / |target|
+  min_restoration: 0.60
+  max_restoration: 1.25         # RF > this is OVER-restoration: a failed control
+  off_target_task: held_out_unrelated_capability
+
+# -------------------------------------------------------------------------------------
+# CROSS-MODEL.  One model's quirk vs a property of the construct.
+# -------------------------------------------------------------------------------------
+cross_model:
+  scope:
+    - primary_checkpoint
+    - distinct_checkpoint
+    - architecture_diverse_model
+    - anti_mimicry_model
+  metrics: [linear_cka, svcca, orthogonal_procrustes]
+  svcca_var_threshold: 0.99     # pre-registered; sensitivity sweep emitted automatically
+  n_alignment_permutations: 200
+  min_architecture_families: 2
+
+# -------------------------------------------------------------------------------------
+# SAFEGUARDS.
+# -------------------------------------------------------------------------------------
+safeguards:
+  preregistration: true
+  condition_blinding: true
+  disjoint_splits: true
+  split_fractions:
+    discovery: 0.4              # modes selected here
+    alignment: 0.2              # cross-model alignment fitted here
+    calibration: 0.1            # thresholds set here
+    confirmation: 0.3           # touched ONCE
+  adversarial_counter_design: true
+  report_all_preregistered_endpoints: true
+
+# -------------------------------------------------------------------------------------
+# ETHICS.  claim_ceiling and prohibit_sentience_claims are enforced by ei.config.validate
+# and cannot be relaxed.
+# -------------------------------------------------------------------------------------
+ethics:
+  claim_ceiling: computational_correlate_only
+  prohibit_sentience_claims: true
+  precautionary_review_trigger: any_confirmatory_pass_on_self_model_constructs
+  disclosure: publish_null_and_inconclusive_results
+  dual_use_review: true
+
+# -------------------------------------------------------------------------------------
+# RUNTIME.  Excluded from the pre-registration hash.
+# -------------------------------------------------------------------------------------
+runtime:
+  backend: synthetic            # synthetic | transformerlens | nnsight | custom
+  scheduler: auto               # auto | slurm | k8s | ray | local
+  seed: 20260920
+  output_dir: runs
+  n_workers: 4
+  gpus: 0
